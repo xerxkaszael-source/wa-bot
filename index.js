@@ -1,5 +1,5 @@
 import express from 'express';
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestWAWebVersion } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'node:fs';
 
@@ -45,11 +45,19 @@ async function startSocket(phoneNumber = null) {
   try {
     fs.mkdirSync(AUTH_DIR, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+    let waVersion;
+    try {
+      waVersion = await fetchLatestWAWebVersion();
+      logger.info({ waVersion }, 'Fetched latest WhatsApp Web version');
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Could not fetch latest WhatsApp Web version; using library default');
+    }
     const currentSock = makeWASocket({
+      ...(waVersion ? { version: waVersion } : {}),
       auth: state,
       logger,
       printQRInTerminal: false,
-      browser: ['Simple Web Pairing Bot', 'Chrome', '1.0.0'],
+      browser: ['Ubuntu', 'Chrome', '20.00.1'],
       markOnlineOnConnect: false,
       syncFullHistory: false
     });

@@ -1,0 +1,17 @@
+{
+  "name": "baileys-web-pairing-bot",
+  "version": "1.0.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "github:PrasszTzy66/Bail",
+    "express": "^4.21.2",
+    "pino": "^9.0.0"
+  }
+}
