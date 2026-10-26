@@ -27,17 +27,23 @@ let sock = null, connecting = false, connected = false;
 let lastStatus = 'Belum terhubung', pairingCode = null, lastPairAttempt = 0, retryTimer = null, reconnecting = false;
 const games = new Map();
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-function statusPayload() { return { connected, connecting, status: lastStatus, pairingCode }; }
+function statusPayload() {
+  const actuallyConnected = Boolean(connected && sock?.user);
+  return { connected: actuallyConnected, connecting, status: lastStatus, pairingCode: actuallyConnected ? null : pairingCode, phone: sock?.user?.id || null };
+}
 function checkToken(req, res, next) {
   if (PAIRING_TOKEN && req.get('x-pairing-token') !== PAIRING_TOKEN) return res.status(401).json({ error: 'Token akses salah.' });
   next();
 }
 function messageText(message) {
   let m = message;
-  for (let i = 0; i < 5 && m; i++) {
+  for (let i = 0; i < 8 && m; i++) {
     if (m.ephemeralMessage?.message) { m = m.ephemeralMessage.message; continue; }
     if (m.viewOnceMessage?.message) { m = m.viewOnceMessage.message; continue; }
     if (m.viewOnceMessageV2?.message) { m = m.viewOnceMessageV2.message; continue; }
+    if (m.documentWithCaptionMessage?.message) { m = m.documentWithCaptionMessage.message; continue; }
+    if (m.editedMessage?.message) { m = m.editedMessage.message; continue; }
+    if (m.deviceSentMessage?.message) { m = m.deviceSentMessage.message; continue; }
     break;
   }
   return m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || m?.videoMessage?.caption || m?.documentMessage?.caption || '';
@@ -69,7 +75,8 @@ async function handleCommand(currentSock, jid, rawBody) {
   const body = rawBody.trim();
   if (!body) return;
   // Accept plain commands and common prefixes, regardless of case.
-  const match = body.match(/^[.!/](ping|menu|chess|chesshelp)\b\s*(.*)$/i) || body.match(/^(ping|menu|chess|chesshelp)\b\s*(.*)$/i);
+  const normalized = body.replace(/^[.!/]+\s*/, '').trim();
+  const match = normalized.match(/^(ping|menu|chess|chesshelp)\b\s*(.*)$/i);
   if (!match) return;
   const command = match[1].toLowerCase();
   if (command === 'ping') {
@@ -98,11 +105,13 @@ async function startSocket(phoneNumber = null) {
     const qrSeen = new Promise(resolve => { qrSeenResolve = resolve; });
     let closeHandled = false;
     currentSock.ev.on('connection.update', ({ connection, qr, lastDisconnect }) => {
+      if (sock !== currentSock) return;
       if (qr) qrSeenResolve();
-      if (connection === 'open') { connected = true; connecting = false; reconnecting = false; pairingCode = null; lastStatus = 'WhatsApp terhubung'; }
+      if (connection === 'open') { connected = true; connecting = false; reconnecting = false; pairingCode = null; lastStatus = `WhatsApp terhubung${currentSock.user?.id ? ` (${currentSock.user.id})` : ''}`; console.log('[WA] Connection open; user=', currentSock.user?.id || 'unknown'); }
       if (connection === 'close' && !closeHandled) {
         closeHandled = true; connected = false; connecting = false;
         const code = lastDisconnect?.error?.output?.statusCode;
+        console.error('[WA] Connection closed; code=', code, 'reason=', lastDisconnect?.error?.message || 'unknown');
         lastStatus = code === DisconnectReason.loggedOut ? 'Sesi logout. Reset sesi lalu pairing ulang.' : `Koneksi terputus (${code ?? 'unknown'}). Mencoba menyambung ulang...`;
         if (code !== DisconnectReason.loggedOut && !retryTimer) {
           retryTimer = setTimeout(async () => { retryTimer = null; if (reconnecting) return; reconnecting = true; try { await startSocket(); } catch (err) { reconnecting = false; connecting = false; lastStatus = `Gagal menyambung ulang: ${err.message}`; } }, code === DisconnectReason.restartRequired ? 500 : 3000);
@@ -110,13 +119,16 @@ async function startSocket(phoneNumber = null) {
       }
     });
     currentSock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (type !== 'notify') return;
+      console.log(`[WA] messages.upsert type=${type} count=${messages?.length || 0}`);
+      if (type !== 'notify' || !Array.isArray(messages)) return;
       for (const msg of messages) {
         if (!msg.message || msg.key.fromMe) continue;
         const jid = msg.key.remoteJid;
         if (!jid || jid === 'status@broadcast' || jid.endsWith('@newsletter')) continue;
-        try { await handleCommand(currentSock, jid, messageText(msg.message)); }
-        catch (err) { logger.error({ err: err.message }, 'Command handler failed'); }
+        const text = messageText(msg.message);
+        if (text) console.log(`[WA] Incoming text from ${jid}: ${JSON.stringify(text.slice(0, 120))}`);
+        try { await handleCommand(currentSock, jid, text); }
+        catch (err) { console.error('[WA] Command handler failed:', err?.stack || err); }
       }
     });
     if (!state.creds.registered && phoneNumber) {
@@ -127,7 +139,16 @@ async function startSocket(phoneNumber = null) {
       lastStatus = 'Kode pairing siap. Masukkan di WhatsApp → Perangkat tertaut → Tautkan dengan nomor telepon.';
       connecting = false;
     } else if (!state.creds.registered) { connecting = false; lastStatus = 'Belum tertaut. Masukkan nomor WhatsApp untuk meminta kode.'; }
-    else lastStatus = 'Sesi tersimpan ditemukan; menunggu WhatsApp tersambung...';
+    else {
+      lastStatus = 'Sesi tersimpan ditemukan; menunggu WhatsApp tersambung...';
+      const sessionWaitTimer = setTimeout(() => {
+        if (sock === currentSock && !connected && connecting) {
+          connecting = false;
+          lastStatus = 'Sesi tersimpan belum tersambung. Periksa Render Logs; jika sesi logout, reset lalu pairing ulang.';
+        }
+      }, 30000);
+      sessionWaitTimer.unref?.();
+    }
   } catch (error) { connecting = false; lastStatus = `Gagal: ${error.message}`; throw error; }
 }
 
