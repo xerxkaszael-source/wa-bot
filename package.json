@@ -1,6 +1,6 @@
 {
-  "name": "baileys-web-pairing-bot",
-  "version": "1.0.2",
+  "name": "baileys-web-pairing-bot-chess",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "github:PrasszTzy66/Bail",
+    "chess.js": "^1.4.0",
     "express": "^4.21.2",
-    "pino": "^9.0.0"
+    "pino": "^9.0.0",
+    "socket.io": "^4.8.1"
   }
 }

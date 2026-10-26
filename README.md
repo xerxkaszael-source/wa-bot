@@ -1,22 +1,27 @@
-# Baileys Web Pairing Bot (fixed)
-Node.js + Baileys + Express. Web UI requests a pairing code without displaying QR.
+# Baileys Web Pairing + Realtime Chess
 
-## Render
+Bot WhatsApp memakai fork `github:PrasszTzy66/Bail`, halaman pairing code, perintah chat, dan game catur web realtime.
+
+## Deploy di Render
 - Build command: `npm install`
 - Start command: `npm start`
-- Node.js 20+
-- Set `PAIRING_TOKEN` in Render Environment to a long random secret, then enter it when prompted by the web UI.
-- Render Free may sleep and does not guarantee 24/7 uptime. Its local filesystem is not persistent, so the WhatsApp auth session may be lost on restart/redeploy. Use persistent storage if your plan supports it.
-- Do not commit `auth_info`, API keys, or other secrets.
+- Node.js 20 atau lebih baru.
+- Set `APP_URL` ke URL publik service Render (mis. `https://nama-service.onrender.com`). Jika tidak diatur, kode mencoba `RENDER_EXTERNAL_URL`.
+- Opsional: set `PAIRING_TOKEN` ke secret acak untuk melindungi endpoint pairing.
+- Setelah ganti `package.json`, gunakan **Manual Deploy → Clear build cache & deploy**.
 
-## Pair
-1. Enter your own WhatsApp phone number in international format, digits only (e.g. `628123456789`).
-2. Click request pairing code.
-3. In WhatsApp: Linked devices > Link a device > Link with phone number instead.
-4. Enter the exact code shown. Baileys/WhatsApp controls the code format; it is not guaranteed to be eight numeric digits.
+## Commands
+- `ping`, `.ping`, `/ping`, `!ping` → `Pong! Bot aktif ✅`
+- `menu`, `.menu`, `/menu`, `!menu` → daftar perintah
+- `chess`, `.chess`, `/chess`, `!chess` → buat game dan kirim link ke chat tempat perintah dikirim
+- `chesshelp` → petunjuk main
 
-The code waits for Baileys' initial socket-ready QR event before requesting a pairing code. It also handles restart-required disconnects by reconnecting.
+## Main catur online
+1. Kirim `.chess` di chat pribadi atau grup WhatsApp.
+2. Bot membalas dengan link game. Kedua pemain buka link yang sama.
+3. Pemain pertama yang menekan Gabung jadi Putih; pemain kedua jadi Hitam.
+4. Langkah divalidasi server dan papan disiarkan realtime ke kedua browser. Tap bidak lalu kotak tujuan.
 
+Game berjalan di browser, bukan sebagai papan interaktif langsung di dalam tampilan chat WhatsApp. Kedua pemain perlu membuka link tersebut. Game disimpan di memori server, jadi akan hilang saat server restart atau tidur. Render Free bisa sleep dan filesystem lokalnya tidak persisten; sesi WhatsApp bisa ikut hilang saat redeploy/restart.
 
-### Compatibility note
-This build imports the requested fork through its default CommonJS export and does not call `fetchLatestWAWebVersion`, because that named export is not available in every build of `PrasszTzy66/Bail`.
+Jangan commit `auth_info`, token, atau API key.
