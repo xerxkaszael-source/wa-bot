@@ -1,129 +1,29 @@
 <!doctype html>
 <html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WhatsApp Web Pairing</title>
-  <style>
-    :root { color-scheme: dark; --bg:#0b1110; --card:#121c19; --line:#263b34; --green:#25d366; --muted:#9db0a8; }
-    * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:22px; background:radial-gradient(circle at top,#15372b 0,#0b1110 52%); color:#eef8f2; font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
-    main { width:min(100%,480px); padding:28px; border:1px solid var(--line); border-radius:24px; background:rgba(18,28,25,.96); box-shadow:0 24px 80px #0006; }
-    .logo { display:grid; place-items:center; width:58px;height:58px;border-radius:18px;background:#143e2b;color:var(--green);font-size:30px;margin-bottom:18px; }
-    h1 { font-size:25px; margin:0 0 6px; } p { color:var(--muted); margin:0 0 20px; }
-    label { display:block; font-size:14px; margin:16px 0 7px; color:#d7e7df; }
-    input,button { width:100%; border-radius:12px; padding:13px 14px; font:inherit; }
-    input { background:#0a100e; color:white; border:1px solid #385147; outline:none; }
-    input:focus { border-color:var(--green); }
-    button { border:0; margin-top:12px; cursor:pointer; background:var(--green); color:#05200f; font-weight:750; }
-    button.secondary { background:#20332b; color:#e7f5ec; border:1px solid #385147; }
-    button:disabled { opacity:.5; cursor:wait; }
-    .codebox { display:none; margin-top:20px; border:1px dashed #3f7659; border-radius:16px; padding:18px; text-align:center; background:#0c1a13; }
-    .code { font-size:30px; font-weight:800; letter-spacing:4px; color:var(--green); overflow-wrap:anywhere; }
-    .status { margin-top:18px; padding:12px 14px; border-radius:12px; background:#0b1410; border:1px solid var(--line); color:#c2d4ca; font-size:14px; overflow-wrap:anywhere; }
-    .small { font-size:12px; margin-top:14px; }
-    .hidden { display:none!important; }
-  </style>
-</head>
-<body>
-<main>
-  <div class="logo">↗</div>
-  <h1>WhatsApp Pairing</h1>
-  <p>Hubungkan WhatsApp ke bot menggunakan kode pairing, tanpa QR.</p>
-
-  <form id="pairForm">
-    <label for="phone">Nomor WhatsApp dengan kode negara</label>
-    <input id="phone" name="phone" inputmode="numeric" autocomplete="tel" placeholder="628123456789" required minlength="8" maxlength="15">
-    <button id="pairBtn" type="submit">Minta kode pairing</button>
-  </form>
-
-  <div class="codebox" id="codeBox">
-    <div style="font-size:13px;color:#9db0a8;margin-bottom:7px">KODE DARI WHATSAPP</div>
-    <div class="code" id="pairCode">--------</div>
-    <button class="secondary" id="copyBtn" type="button">Salin kode</button>
-    <p class="small">Di HP: WhatsApp → Perangkat tertaut → Tautkan perangkat → Tautkan dengan nomor telepon.</p>
-  </div>
-
-  <div class="status" id="status">Memeriksa status bot...</div>
-  <button class="secondary hidden" id="resetBtn" type="button">Hapus sesi & pairing ulang</button>
-  <p class="small">Jangan bagikan kode pairing kepada orang lain. Gunakan hanya untuk akun WhatsApp milik sendiri.</p>
-</main>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Web Pairing</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1110;--card:#121c19;--line:#263b34;--green:#25d366;--muted:#9db0a8}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at top,#15372b 0,#0b1110 52%);color:#eef8f2;font:16px/1.5 system-ui,sans-serif}
+main{width:min(100%,480px);padding:28px;border:1px solid var(--line);border-radius:24px;background:rgba(18,28,25,.96);box-shadow:0 24px 80px #0006}
+.logo{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:#143e2b;color:var(--green);font-size:30px;margin-bottom:18px}
+h1{font-size:25px;margin:0 0 6px}p{color:var(--muted);margin:0 0 20px}label{display:block;font-size:14px;margin:16px 0 7px}
+input,button{width:100%;border-radius:12px;padding:13px 14px;font:inherit}input{background:#0a100e;color:white;border:1px solid #385147;outline:none}input:focus{border-color:var(--green)}
+button{border:0;margin-top:12px;cursor:pointer;background:var(--green);color:#05200f;font-weight:750}button.secondary{background:#20332b;color:#e7f5ec;border:1px solid #385147}button:disabled{opacity:.5;cursor:wait}
+.codebox{display:none;margin-top:20px;border:1px dashed #3f7659;border-radius:16px;padding:18px;text-align:center;background:#0c1a13}
+.code{font-size:30px;font-weight:800;letter-spacing:4px;color:var(--green);overflow-wrap:anywhere}.status{margin-top:18px;padding:12px 14px;border-radius:12px;background:#0b1410;border:1px solid var(--line);color:#c2d4ca;font-size:14px;overflow-wrap:anywhere}.small{font-size:12px;margin-top:14px}.hidden{display:none!important}
+</style></head>
+<body><main><div class="logo">↗</div><h1>WhatsApp Pairing</h1><p>Hubungkan WhatsApp ke bot menggunakan kode pairing, tanpa QR.</p>
+<form id="pairForm"><label for="phone">Nomor WhatsApp dengan kode negara</label><input id="phone" inputmode="numeric" autocomplete="tel" placeholder="628123456789" required minlength="8" maxlength="15"><button id="pairBtn" type="submit">Minta kode pairing</button></form>
+<div class="codebox" id="codeBox"><div style="font-size:13px;color:#9db0a8;margin-bottom:7px">KODE DARI WHATSAPP</div><div class="code" id="pairCode">--------</div><button class="secondary" id="copyBtn" type="button">Salin kode</button><p class="small">Di HP: WhatsApp → Perangkat tertaut → Tautkan perangkat → Tautkan dengan nomor telepon.</p></div>
+<div class="status" id="status">Memeriksa status bot...</div><button class="secondary hidden" id="resetBtn" type="button">Hapus sesi & pairing ulang</button><p class="small">Jangan bagikan kode pairing kepada orang lain. Gunakan hanya untuk akun WhatsApp milik sendiri.</p></main>
 <script>
-  const $ = id => document.getElementById(id);
-  let accessToken = sessionStorage.getItem('pairingToken') || '';
-
-  async function api(url, options = {}) {
-    const headers = { 'Content-Type':'application/json', 'x-pairing-token':accessToken, ...(options.headers || {}) };
-    const response = await fetch(url, { ...options, headers });
-    const data = await response.json().catch(() => ({}));
-    if (response.status === 401 && !accessToken) {
-      const token = prompt('Jika admin memasang PAIRING_TOKEN di Render, masukkan token akses:');
-      if (token) {
-        accessToken = token;
-        sessionStorage.setItem('pairingToken', token);
-        return api(url, options);
-      }
-    }
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-    return data;
-  }
-
-  function render(data) {
-    $('status').textContent = data.status || 'Status tidak diketahui';
-    if (data.pairingCode) {
-      $('codeBox').style.display = 'block';
-      $('pairCode').textContent = data.pairingCode;
-    }
-    if (data.connected) {
-      $('codeBox').style.display = 'none';
-      $('resetBtn').classList.remove('hidden');
-      $('status').textContent = 'WhatsApp terhubung ✓';
-    }
-    $('pairBtn').disabled = !!data.connected || !!data.connecting;
-  }
-
-  $('pairForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    $('pairBtn').disabled = true;
-    $('status').textContent = 'Meminta kode pairing...';
-    $('codeBox').style.display = 'none';
-    try {
-      render(await api('/api/pair', {
-        method:'POST',
-        body:JSON.stringify({ phone:$('phone').value })
-      }));
-    } catch (err) {
-      $('status').textContent = err.message;
-    } finally {
-      $('pairBtn').disabled = false;
-    }
-  });
-
-  $('copyBtn').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText($('pairCode').textContent);
-      $('copyBtn').textContent = 'Tersalin ✓';
-      setTimeout(() => $('copyBtn').textContent = 'Salin kode', 1500);
-    } catch {
-      $('status').textContent = 'Salin kode secara manual.';
-    }
-  });
-
-  $('resetBtn').addEventListener('click', async () => {
-    if (!confirm('Hapus sesi tersimpan dan putuskan koneksi?')) return;
-    try {
-      render(await api('/api/reset', { method:'POST', body:'{}' }));
-      $('resetBtn').classList.add('hidden');
-      $('codeBox').style.display = 'none';
-    } catch (err) { $('status').textContent = err.message; }
-  });
-
-  async function refresh() {
-    try { render(await api('/api/status')); }
-    catch (err) { $('status').textContent = err.message; }
-  }
-  refresh();
-  setInterval(refresh, 4000);
-</script>
-</body>
-</html>
+const $=id=>document.getElementById(id);let accessToken=sessionStorage.getItem('pairingToken')||'';
+async function api(url,options={}){const headers={'Content-Type':'application/json','x-pairing-token':accessToken,...(options.headers||{})};const response=await fetch(url,{...options,headers});const data=await response.json().catch(()=>({}));if(response.status===401&&!accessToken){const token=prompt('Masukkan token akses admin jika PAIRING_TOKEN dipasang di Render:');if(token){accessToken=token;sessionStorage.setItem('pairingToken',token);return api(url,options)}}if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);return data}
+function render(data){$('status').textContent=data.status||'Status tidak diketahui';if(data.pairingCode){$('codeBox').style.display='block';$('pairCode').textContent=data.pairingCode}if(data.connected){$('codeBox').style.display='none';$('resetBtn').classList.remove('hidden');$('status').textContent='WhatsApp terhubung ✓'}$('pairBtn').disabled=!!data.connected||!!data.connecting}
+$('pairForm').addEventListener('submit',async e=>{e.preventDefault();$('pairBtn').disabled=true;$('status').textContent='Meminta kode pairing...';$('codeBox').style.display='none';try{render(await api('/api/pair',{method:'POST',body:JSON.stringify({phone:$('phone').value})}))}catch(err){$('status').textContent=err.message}finally{$('pairBtn').disabled=false}});
+$('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('pairCode').textContent);$('copyBtn').textContent='Tersalin ✓';setTimeout(()=>$('copyBtn').textContent='Salin kode',1500)}catch{$('status').textContent='Salin kode secara manual.'}});
+$('resetBtn').addEventListener('click',async()=>{if(!confirm('Hapus sesi tersimpan dan putuskan koneksi?'))return;try{render(await api('/api/reset',{method:'POST',body:'{}'}));$('resetBtn').classList.add('hidden');$('codeBox').style.display='none'}catch(err){$('status').textContent=err.message}});
+async function refresh(){try{render(await api('/api/status'))}catch(err){$('status').textContent=err.message}}refresh();setInterval(refresh,4000);
+</script></body></html>

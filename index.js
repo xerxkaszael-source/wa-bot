@@ -1,11 +1,7 @@
 import express from 'express';
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason
-} from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'node:fs';
-import path from 'node:path';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -23,29 +19,25 @@ let lastStatus = 'Belum terhubung';
 let pairingCode = null;
 let lastPairAttempt = 0;
 let retryTimer = null;
+let reconnecting = false;
 
 function statusPayload() {
-  return {
-    connected,
-    connecting,
-    status: lastStatus,
-    pairingCode: pairingCode || null
-  };
+  return { connected, connecting, status: lastStatus, pairingCode };
 }
 
 function checkToken(req, res, next) {
-  // Set PAIRING_TOKEN in Render Environment to protect the pairing page/API.
   if (PAIRING_TOKEN && req.get('x-pairing-token') !== PAIRING_TOKEN) {
     return res.status(401).json({ error: 'Token akses salah.' });
   }
   next();
 }
 
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 async function startSocket(phoneNumber = null) {
   if (connecting || connected) {
-    throw new Error(connected ? 'WhatsApp sudah terhubung.' : 'Bot sedang memulai koneksi.');
+    throw new Error(connected ? 'WhatsApp sudah terhubung.' : 'Koneksi sedang dimulai, tunggu sebentar.');
   }
-
   connecting = true;
   lastStatus = 'Menyiapkan koneksi WhatsApp...';
   pairingCode = null;
@@ -53,8 +45,7 @@ async function startSocket(phoneNumber = null) {
   try {
     fs.mkdirSync(AUTH_DIR, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-
-    sock = makeWASocket({
+    const currentSock = makeWASocket({
       auth: state,
       logger,
       printQRInTerminal: false,
@@ -62,71 +53,85 @@ async function startSocket(phoneNumber = null) {
       markOnlineOnConnect: false,
       syncFullHistory: false
     });
+    sock = currentSock;
+    currentSock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('creds.update', saveCreds);
+    let qrSeenResolve;
+    const qrSeen = new Promise(resolve => { qrSeenResolve = resolve; });
+    let closeHandled = false;
 
-    sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+    currentSock.ev.on('connection.update', ({ connection, qr, lastDisconnect }) => {
+      // Baileys uses the QR update internally as a signal that the socket is ready
+      // for requestPairingCode; we do not display the QR itself.
+      if (qr) qrSeenResolve();
+
       if (connection === 'open') {
         connected = true;
         connecting = false;
+        reconnecting = false;
         pairingCode = null;
         lastStatus = 'WhatsApp terhubung';
-      } else if (connection === 'close') {
+      }
+
+      if (connection === 'close' && !closeHandled) {
+        closeHandled = true;
         connected = false;
         connecting = false;
         const code = lastDisconnect?.error?.output?.statusCode;
         lastStatus = code === DisconnectReason.loggedOut
-          ? 'Sesi logout. Hapus sesi melalui endpoint reset lalu pairing ulang.'
-          : 'Koneksi terputus. Coba mulai pairing ulang jika tidak tersambung kembali.';
+          ? 'Sesi logout. Reset sesi lalu pairing ulang.'
+          : `Koneksi terputus (${code ?? 'unknown'}). Mencoba menyambung ulang...`;
 
         if (code !== DisconnectReason.loggedOut && !retryTimer) {
-          retryTimer = setTimeout(() => {
+          retryTimer = setTimeout(async () => {
             retryTimer = null;
-            startSocket().catch(err => {
+            if (reconnecting) return;
+            reconnecting = true;
+            try {
+              await startSocket();
+            } catch (err) {
+              reconnecting = false;
               connecting = false;
               lastStatus = `Gagal menyambung ulang: ${err.message}`;
-            });
-          }, 5000);
+            }
+          }, code === DisconnectReason.restartRequired ? 500 : 3000);
         }
       }
     });
 
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    currentSock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return;
       for (const msg of messages) {
         if (!msg.message || msg.key.fromMe) continue;
         const jid = msg.key.remoteJid;
         if (!jid || jid === 'status@broadcast' || jid.endsWith('@newsletter')) continue;
-        const body =
-          msg.message.conversation ??
+        const body = msg.message.conversation ??
           msg.message.extendedTextMessage?.text ??
-          msg.message.imageMessage?.caption ??
-          '';
+          msg.message.imageMessage?.caption ?? '';
         const command = body.trim().toLowerCase();
-
         if (command === 'ping') {
-          await sock.sendMessage(jid, { text: 'Pong! Bot aktif ✅' });
+          await currentSock.sendMessage(jid, { text: 'Pong! Bot aktif ✅' });
         } else if (command === 'menu') {
-          await sock.sendMessage(jid, {
-            text: '*MENU BOT*\\n\\n• ping — cek bot\\n• menu — tampilkan menu'
-          });
+          await currentSock.sendMessage(jid, { text: '*MENU BOT*\\n\\n• ping — cek bot\\n• menu — tampilkan menu' });
         }
       }
     });
 
-    if (!state.creds.registered) {
-      if (!phoneNumber) {
-        connecting = false;
-        lastStatus = 'Sesi belum tertaut. Masukkan nomor WhatsApp untuk pairing.';
-        return;
-      }
-
-      // Give the socket a moment to initialize before requesting the code.
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const code = await sock.requestPairingCode(phoneNumber);
+    if (!state.creds.registered && phoneNumber) {
+      lastStatus = 'Menunggu socket siap untuk meminta kode pairing...';
+      // Official Baileys examples advise waiting for the initial QR update before requesting code.
+      await Promise.race([
+        qrSeen,
+        wait(15000).then(() => { throw new Error('Socket belum siap (event QR tidak diterima). Coba lagi beberapa saat.'); })
+      ]);
+      if (sock !== currentSock) throw new Error('Socket telah diganti. Coba minta kode lagi.');
+      const code = await currentSock.requestPairingCode(phoneNumber);
       pairingCode = String(code);
-      lastStatus = 'Kode pairing siap. Masukkan di WhatsApp pada Perangkat Tertaut.';
+      lastStatus = 'Kode pairing siap. Masukkan di WhatsApp → Perangkat tertaut → Tautkan dengan nomor telepon.';
       connecting = false;
+    } else if (!state.creds.registered) {
+      connecting = false;
+      lastStatus = 'Belum tertaut. Masukkan nomor WhatsApp untuk meminta kode.';
     } else {
       lastStatus = 'Sesi tersimpan ditemukan; menunggu WhatsApp tersambung...';
     }
@@ -137,23 +142,19 @@ async function startSocket(phoneNumber = null) {
   }
 }
 
-app.get('/api/status', checkToken, (_req, res) => {
-  res.json(statusPayload());
-});
+app.get('/api/status', checkToken, (_req, res) => res.json(statusPayload()));
 
 app.post('/api/pair', checkToken, async (req, res) => {
-  const now = Date.now();
-  if (now - lastPairAttempt < 15000) {
+  if (Date.now() - lastPairAttempt < 15000) {
     return res.status(429).json({ error: 'Tunggu 15 detik sebelum mencoba lagi.' });
   }
-  lastPairAttempt = now;
-
+  lastPairAttempt = Date.now();
   const phone = String(req.body?.phone || '').replace(/\D/g, '');
   if (phone.length < 8 || phone.length > 15) {
     return res.status(400).json({ error: 'Masukkan nomor internasional dengan kode negara, angka saja. Contoh Indonesia: 628123456789.' });
   }
   if (connected) return res.status(409).json({ error: 'WhatsApp sudah terhubung.' });
-  if (connecting) return res.status(409).json({ error: 'Bot sedang memulai koneksi. Tunggu sebentar.' });
+  if (connecting) return res.status(409).json({ error: 'Koneksi sedang dimulai. Tunggu sebentar.' });
 
   try {
     await startSocket(phone);
@@ -163,17 +164,18 @@ app.post('/api/pair', checkToken, async (req, res) => {
   }
 });
 
-app.post('/api/reset', checkToken, async (_req, res) => {
+app.post('/api/reset', checkToken, (_req, res) => {
   try {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = null;
     if (sock) {
       try { sock.end(undefined); } catch {}
       sock = null;
     }
     connected = false;
     connecting = false;
+    reconnecting = false;
     pairingCode = null;
-    if (retryTimer) clearTimeout(retryTimer);
-    retryTimer = null;
     fs.rmSync(AUTH_DIR, { recursive: true, force: true });
     lastStatus = 'Sesi lokal dihapus. Masukkan nomor untuk pairing ulang.';
     res.json(statusPayload());
@@ -184,12 +186,8 @@ app.post('/api/reset', checkToken, async (_req, res) => {
 
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Web pairing app listening on port ${PORT}`);
-  // If an auth session already exists, try reconnecting it automatically.
   if (fs.existsSync(AUTH_DIR) && fs.readdirSync(AUTH_DIR).length > 0) {
-    try {
-      await startSocket();
-    } catch (error) {
-      console.error('Auto reconnect failed:', error.message);
-    }
+    try { await startSocket(); }
+    catch (error) { console.error('Auto reconnect failed:', error.message); }
   }
 });
