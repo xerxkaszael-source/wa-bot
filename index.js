@@ -1,5 +1,9 @@
 import express from 'express';
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestWAWebVersion } from '@whiskeysockets/baileys';
+import baileysPkg from '@whiskeysockets/baileys';
+
+// Compatible with forks that publish Baileys as CommonJS.
+const makeWASocket = baileysPkg.default || baileysPkg.makeWASocket || baileysPkg;
+const { useMultiFileAuthState, DisconnectReason } = baileysPkg;
 import pino from 'pino';
 import fs from 'node:fs';
 
@@ -45,15 +49,9 @@ async function startSocket(phoneNumber = null) {
   try {
     fs.mkdirSync(AUTH_DIR, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-    let waVersion;
-    try {
-      waVersion = await fetchLatestWAWebVersion();
-      logger.info({ waVersion }, 'Fetched latest WhatsApp Web version');
-    } catch (err) {
-      logger.warn({ err: err.message }, 'Could not fetch latest WhatsApp Web version; using library default');
-    }
+    // Do not call fetchLatestWAWebVersion here: the requested fork does not
+    // necessarily export it. Let the fork use its own default WA Web version.
     const currentSock = makeWASocket({
-      ...(waVersion ? { version: waVersion } : {}),
       auth: state,
       logger,
       printQRInTerminal: false,

@@ -16,3 +16,7 @@ Node.js + Baileys + Express. Web UI requests a pairing code without displaying Q
 4. Enter the exact code shown. Baileys/WhatsApp controls the code format; it is not guaranteed to be eight numeric digits.
 
 The code waits for Baileys' initial socket-ready QR event before requesting a pairing code. It also handles restart-required disconnects by reconnecting.
+
+
+### Compatibility note
+This build imports the requested fork through its default CommonJS export and does not call `fetchLatestWAWebVersion`, because that named export is not available in every build of `PrasszTzy66/Bail`.
