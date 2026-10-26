@@ -1,4 +1,6 @@
 node_modules/
 auth_info/
+elo.json
+.empty-*.json
 .env
 .DS_Store
