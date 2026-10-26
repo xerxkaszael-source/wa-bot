@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node test/should-handle-message.test.mjs"
   },
   "engines": {
     "node": ">=20"
