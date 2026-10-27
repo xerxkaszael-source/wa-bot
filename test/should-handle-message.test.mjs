@@ -6,18 +6,23 @@ import { shouldHandleMessage, boardText, applyMove, startClock, finishIfNeeded, 
 
 const OWN = '628123456789:12@s.whatsapp.net';
 const OTHER = '628999999999:1@s.whatsapp.net';
-const msg = (remoteJid, fromMe, conversation) => ({ key: { remoteJid, fromMe }, message: { conversation } });
+const msg = (remoteJid, fromMe, conversation, id = 'msg-1') => ({ key: { remoteJid, fromMe, id }, message: { conversation } });
 
-// The bot is paired with the owner's own number, so commands the owner sends arrive
-// with fromMe=true. This is the case that used to be dropped, leaving the bot silent.
+// The bot is paired with the owner's own number, so every command the owner types
+// arrives with fromMe=true, including in groups — this must be handled, or the bot
+// is silent for the owner.
 assert.equal(shouldHandleMessage(msg(OWN, true, '.ping'), OWN), true, 'owner self-chat must be handled');
+assert.equal(shouldHandleMessage(msg('120363000000000000@g.us', true, '.ping'), OWN), true, 'owner typing in a group must be handled');
 
 // A different number messaging the bot still works.
 assert.equal(shouldHandleMessage(msg(OTHER, false, '.ping'), OWN), true, 'other senders must be handled');
 
-// The bot's own outgoing messages in other chats are still ignored.
-assert.equal(shouldHandleMessage(msg('120363000000000000@g.us', true, '.ping'), OWN), false, 'own group messages must be dropped');
-assert.equal(shouldHandleMessage(msg(OTHER, true, '.ping'), OWN), false, 'fromMe from another chat must be dropped');
+// Echoes of the bot's own outgoing sends (same key id) are filtered via sentIds.
+import { sentIds as sentIdsForTest } from '../index.js';
+sentIdsForTest.add('echo-id-1');
+assert.equal(shouldHandleMessage({ key: { remoteJid: OTHER, fromMe: true, id: 'echo-id-1' }, message: { conversation: 'menu ping' } }, OWN), false, 'echo of our own send must be dropped');
+// A fromMe message from the owner's own account in a DM must still be handled.
+assert.equal(shouldHandleMessage(msg(OTHER, true, '.ping'), OWN), true, 'owner command in another chat must be handled');
 
 // Noise is still ignored.
 assert.equal(shouldHandleMessage(msg('status@broadcast', false, 'x'), OWN), false, 'status broadcast must be dropped');

@@ -4,3 +4,7 @@ elo.json
 .empty-*.json
 .env
 .DS_Store
+.tmp-fork/
+cloudflared.exe
+allowlist.json
+*.out
