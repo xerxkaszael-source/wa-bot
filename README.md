@@ -32,7 +32,7 @@
 ### Prerequisites
 
 - Node.js >= 20
-- yt-dlp (`pip install yt-dlp`)
+- yt-dlp (`pip install yt-dlp` atau via `requirements.txt`)
 - ffmpeg (untuk proses media, opsional untuk download-only)
 
 ### Deploy di Render
@@ -53,12 +53,12 @@
 | `APP_URL` | Ya | URL publik Render (mis. `https://nama-service.onrender.com`) |
 | `PAIRING_TOKEN` | No | Secret acak untuk proteksi endpoint pairing |
 | `OWNER_NUMBER` | No | Nomor admin (format internasional, tanpa `+`) |
-| `YTDLP_PATH` | No | Path ke `yt-dlp`. Di Render, set ke `python3 -m yt_dlp` agar tidak ENOENT |
+| `YTDLP_PATH` | No | Path ke `yt-dlp`. Di Render, set ke `python3 -m yt_dlp` dan pastikan `requirements.txt` menginstall `yt-dlp` |
 | `YT_DLP_TIMEOUT_MS` | No | Timeout download (default: `120000` = 2 menit) |
 
 4. **Manual Deploy → Clear build cache & deploy**
 
-> ⚠️ Render Free tier spin-down setelah 15 menit tanpa traffic. Bot sudah auto-ping setiap 8 menit untuk mencegah sleep.
+> ⚠️ Render Free tier spin-down setelah 15 menit tanpa traffic. Self-ping tidak cukup untuk mencegah sleep — butuh cron eksternal (GitHub Actions / UptimeRobot).
 
 ---
 
@@ -151,7 +151,7 @@ Menjalankan self-check untuk:
 ## ⚠️ Catatan Penting
 
 - **Render Free**: Data di disk (`auth_info`, `elo.json`) **akan hilang** saat spin-down atau redeploy. Gunakan **Persistent Disk** + plan berbayar jika ingin sesi permanen.
-- **yt-dlp di Render**: Set `YTDLP_PATH=python3 -m yt_dlp` di environment variables agar tidak error `spawn yt-dlp ENOENT`.
+- **yt-dlp di Render**: Set `YTDLP_PATH=python3 -m yt_dlp` dan pastikan `requirements.txt` menginstall `yt-dlp` agar module ditemukan.
 - **Instagram**: Beberapa post memerlukan cookies/login. Jika download gagal, coba link TikTok/YouTube terlebih dahulu.
 - **File Size**: Download dibatasi 100MB untuk mencegah timeout WhatsApp.
 - **Allowlist**: Jika `OWNER_NUMBER` di-set, hanya owner yang bisa mengubah allowlist. Semua orang tetap bisa main catur di chat yang sama.

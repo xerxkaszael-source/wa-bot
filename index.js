@@ -977,12 +977,11 @@ server.listen(PORT, '0.0.0.0', async () => {
   }
 });
 
-// Render free-tier web services spin down after 15 minutes without inbound traffic
-// and lose everything written to disk when they do — including auth_info, which is
-// exactly what makes the UI say "belum terhubung" after a refresh. Pinging our own
-// public URL keeps the instance warm so the WhatsApp session survives.
-// shortcut: redeploys and instance recycling still wipe a free-tier disk; point
-// AUTH_DIR at a persistent disk (paid plan) if the session must survive those too.
+// Render free-tier web services spin down after 15 minutes without inbound traffic.
+// A self-ping (below) only helps while the process is already awake; it cannot wake
+// a spun-down instance. Use an external cron (GitHub Actions / UptimeRobot) to keep
+// the service warm. Disk (auth_info) is still wiped on spin-down/redeploy unless
+// AUTH_DIR points to a persistent disk (paid plan).
 if (!/localhost|127\.0\.0\.1/.test(APP_URL)) {
   setInterval(() => { fetch(`${APP_URL}/healthz`).catch(() => {}); }, 8 * 60 * 1000).unref?.();
 }
