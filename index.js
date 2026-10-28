@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { Server as SocketIOServer } from 'socket.io';
 import { Chess } from 'chess.js';
 import { boardPNG } from './boardpng.js';
@@ -60,6 +62,93 @@ let sessionWaitTimer = null;
 const games = new Map();
 const chatGames = new Map(); // chat jid -> game id, so moves can be typed straight into the chat
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- media download (OmniDL-style: yt-dlp + gallery-dl extraction) ---
+const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
+const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || join(tmpdir(), 'wa-bot-downloads');
+const YT_DLP_TIMEOUT = Number(process.env.YT_DLP_TIMEOUT_MS || 120000);
+const YT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+
+function ensureDownloadDir() {
+  try { fs.mkdirSync(DOWNLOAD_DIR, { recursive: true }); } catch {}
+}
+
+function spawnYtDlp(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(YTDLP, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('Download timeout'));
+    }, YT_DLP_TIMEOUT);
+    child.stdout.on('data', d => { stdout += d; });
+    child.stderr.on('data', d => { stderr += d; });
+    child.on('error', err => { clearTimeout(timer); reject(err); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0) resolve(stdout);
+      else {
+        const msg = stderr.trim() || `yt-dlp exited ${code}`;
+        const err = new Error(msg);
+        err.code = code;
+        reject(err);
+      }
+    });
+  });
+}
+
+async function handleDownload(currentSock, jid, rawUrl) {
+  const url = rawUrl.trim();
+  if (!url) return;
+  ensureDownloadDir();
+
+  await currentSock.sendMessage(jid, { text: '⏳ Mengambil info media...' }).catch(() => {});
+
+  let meta;
+  try {
+    const json = await spawnYtDlp(['-j', '--no-warnings', '-f', YT_FORMAT, '--', url]);
+    meta = JSON.parse(json);
+  } catch (err) {
+    const reason = /login|sign in|cookie|private|age.restrict|empty media response/i.test(err.message)
+      ? 'Post ini memerlukan login/privasi. Coba link public lain.'
+      : `Gagal mengambil media: ${err.message}`;
+    await currentSock.sendMessage(jid, { text: `❌ ${reason}` }).catch(() => {});
+    return;
+  }
+
+  const ext = (meta.ext || '').toLowerCase();
+  const isImage = ['jpg','jpeg','png','webp','avif','gif','bmp'].includes(ext);
+  const title = (meta.title || 'Media').slice(0, 100);
+  const fileName = `${crypto.randomUUID()}.${isImage ? 'jpg' : 'mp4'}`;
+  const filePath = join(DOWNLOAD_DIR, fileName);
+
+  await currentSock.sendMessage(jid, { text: `⏳ Mengunduh: ${title}...` }).catch(() => {});
+
+  try {
+    await spawnYtDlp(['-o', filePath, '--no-warnings', '-f', YT_FORMAT, '--', url]);
+  } catch (err) {
+    await currentSock.sendMessage(jid, { text: `❌ Gagal mengunduh: ${err.message}` }).catch(() => {});
+    return;
+  }
+
+  try {
+    const stats = fs.statSync(filePath);
+    if (stats.size > 100 * 1024 * 1024) {
+      await currentSock.sendMessage(jid, { text: '⚠️ File terlalu besar (>100MB).' }).catch(() => {});
+      return;
+    }
+    if (isImage) {
+      await currentSock.sendMessage(jid, { image: { url: filePath }, caption: title });
+    } else {
+      await currentSock.sendMessage(jid, { video: { url: filePath }, caption: title, mimetype: 'video/mp4' });
+    }
+  } catch (err) {
+    await currentSock.sendMessage(jid, { text: `❌ Gagal kirim media: ${err.message}` }).catch(() => {});
+  } finally {
+    try { fs.unlinkSync(filePath); } catch {}
+  }
+}
+
 function statusPayload() {
   const actuallyConnected = Boolean(connected && sock?.user);
   return { connected: actuallyConnected, connecting, status: lastStatus, pairingCode: actuallyConnected ? null : pairingCode, phone: sock?.user?.id || null };
@@ -533,7 +622,7 @@ function handleMove(senderKey, jid, raw) {
   return true;
 }
 function sendMenu(jid) {
-  return sock.sendMessage(jid, { text: '*MENU BOT*\n\n• ping / .ping / !ping — cek bot\n• menu / .menu / !menu — tampilkan menu\n• chess / .chess / !chess — buat game + lobby waktu\n• chess <username> — profilChess.com (rating, form, kurva)\n• chesshelp — cara bermain\n• elo — rating ELO kamu\n• top — papan peringkat' });
+  return sock.sendMessage(jid, { text: '*MENU BOT*\n\n• ping / .ping / !ping — cek bot\n• menu / .menu / !menu — tampilkan menu\n• download / .download / !download <url> — unduh video TikTok/YouTube/Instagram\n• chess / .chess / !chess — buat game + lobby waktu\n• chess <username> — profilChess.com (rating, form, kurva)\n• chesshelp — cara bermain\n• elo — rating ELO kamu\n• top — papan peringkat' });
 }
 // .chess <username> — Chess.com profile card. Sends the aesthetic HTML card when the
 // client can render rich HTML (RICH_HTML), otherwise (and as error-free fallback) a
@@ -564,7 +653,7 @@ async function handleCommand(currentSock, jid, rawBody, senderKey = '', admin = 
   if (!body) return;
   // Accept plain commands and common prefixes, regardless of case.
   const normalized = body.replace(/^[.!/]+\s*/, '').trim();
-  const match = normalized.match(/^(ping|menu|chess|chesshelp|elo|top|allowlist|delallow|listallow)\b\s*(.*)$/i);
+  const match = normalized.match(/^(ping|menu|download|chess|chesshelp|elo|top|allowlist|delallow|listallow)\b\s*(.*)$/i);
   if (!match) return;
   const command = match[1].toLowerCase();
   const arg = (match[2] || '').trim();
@@ -634,6 +723,12 @@ async function handleCommand(currentSock, jid, rawBody, senderKey = '', admin = 
     const url = `${appUrl()}/chess.html?game=${game.id}`;
     await currentSock.sendMessage(jid, { text: `♟️ *GAME CATUR ONLINE DIBUAT!*\n\nPapan muncul di chat ini. Dua pemain memilih waktu: balas *1*, *10*, atau *15* (menit). Kalau pilihannya sama, jam langsung mulai.\n\nSetelah mulai: tap bidak lalu petak tujuan di papan, atau ketik langkah (contoh: *e2e4*).\nPemain pertama yang masuk jadi Putih, pemain kedua jadi Hitam.\n\nVersi tap-bidak di browser: ${url}\n\nKetik .chesshelp untuk cara main.` });
     await broadcastGame(game);
+  } else if (command === 'download') {
+    if (!arg) {
+      await currentSock.sendMessage(jid, { text: 'Pakai: .download <url tiktok/youtube/instagram>' }).catch(() => {});
+      return;
+    }
+    await handleDownload(currentSock, jid, arg);
   }
 }
 // Leaderboard rendered in the chat bubble. Same rich-HTML channel as the board.
