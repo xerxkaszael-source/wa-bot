@@ -257,9 +257,13 @@ async function resolveLid(sender, currentSock) {
   return false;
 }
 // Proactively map every phone-number allowlist entry to its LID as soon as the
-// connection is open, so allowlisted users never hit a miss.
+// connection is open, so allowlisted users never hit a miss. OWNER_NUMBER is
+// included even when it is not in allowlist.json, because groups report the
+// owner as an LID and fromMe is false for non-bot-account senders.
 async function backfillLidMap(currentSock) {
-  for (const entry of [...allowed]) {
+  const entries = new Set([...allowed]);
+  if (OWNER_NUMBER && /^\d+$/.test(OWNER_NUMBER)) entries.add(OWNER_NUMBER);
+  for (const entry of entries) {
     if (entry.includes('@')) continue; // already an LID/jid tag form
     try {
       const res = currentSock.onWhatsApp ? await currentSock.onWhatsApp(entry) : [];
