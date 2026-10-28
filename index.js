@@ -64,7 +64,8 @@ const chatGames = new Map(); // chat jid -> game id, so moves can be typed strai
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- media download (OmniDL-style: yt-dlp + gallery-dl extraction) ---
-const YTDLP = process.env.YTDLP_PATH || 'yt-dlp';
+const YTDLP_RAW = process.env.YTDLP_PATH || 'yt-dlp';
+const YTDLP = YTDLP_RAW.includes(' ') ? YTDLP_RAW.split(' ') : [YTDLP_RAW];
 const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || join(tmpdir(), 'wa-bot-downloads');
 const YT_DLP_TIMEOUT = Number(process.env.YT_DLP_TIMEOUT_MS || 120000);
 const YT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
@@ -75,7 +76,9 @@ function ensureDownloadDir() {
 
 function spawnYtDlp(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(YTDLP, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const cmd = YTDLP[0];
+    const cmdArgs = [...YTDLP.slice(1), ...args];
+    const child = spawn(cmd, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
