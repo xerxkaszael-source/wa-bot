@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Server as SocketIOServer } from 'socket.io';
 import { Chess } from 'chess.js';
+import ffmpegPath from 'ffmpeg-static';
 import { boardPNG } from './boardpng.js';
 import { fetchChessProfile, profileHtml, profileText } from './chessprofile.js';
 
@@ -69,6 +70,7 @@ const YTDLP = YTDLP_RAW.includes(' ') ? YTDLP_RAW.split(' ') : [YTDLP_RAW];
 const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || join(tmpdir(), 'wa-bot-downloads');
 const YT_DLP_TIMEOUT = Number(process.env.YT_DLP_TIMEOUT_MS || 120000);
 const YT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
+const FFMPEG_PATH = ffmpegPath;
 
 function ensureDownloadDir() {
   try { fs.mkdirSync(DOWNLOAD_DIR, { recursive: true }); } catch {}
@@ -77,7 +79,7 @@ function ensureDownloadDir() {
 function spawnYtDlp(args) {
   return new Promise((resolve, reject) => {
     const cmd = YTDLP[0];
-    const cmdArgs = [...YTDLP.slice(1), ...args];
+    const cmdArgs = [...YTDLP.slice(1), '--ffmpeg-location', FFMPEG_PATH, ...args];
     const child = spawn(cmd, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     const timer = setTimeout(() => {
