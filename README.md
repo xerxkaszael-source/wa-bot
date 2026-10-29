@@ -42,7 +42,7 @@
 
 | Setting | Value |
 |---------|-------|
-| **Build Command** | `npm install` |
+| **Build Command** | `pip install --upgrade yt-dlp && npm install` |
 | **Start Command** | `npm start` |
 | **Node Version** | `20.x` atau lebih baru |
 
@@ -53,7 +53,7 @@
 | `APP_URL` | Ya | URL publik Render (mis. `https://nama-service.onrender.com`) |
 | `PAIRING_TOKEN` | No | Secret acak untuk proteksi endpoint pairing |
 | `OWNER_NUMBER` | No | Nomor admin (format internasional, tanpa `+`) |
-| `YTDLP_PATH` | No | Path ke `yt-dlp`. Di Render, set ke `python3 -m yt_dlp` dan pastikan `requirements.txt` menginstall `yt-dlp` |
+| `YTDLP_PATH` | No | Path ke `yt-dlp`. Di Render, set ke `python3 -m yt_dlp` |
 | `YT_DLP_TIMEOUT_MS` | No | Timeout download (default: `120000` = 2 menit) |
 
 4. **Manual Deploy → Clear build cache & deploy**

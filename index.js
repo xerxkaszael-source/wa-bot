@@ -71,6 +71,21 @@ const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || join(tmpdir(), 'wa-bot-download
 const YT_DLP_TIMEOUT = Number(process.env.YT_DLP_TIMEOUT_MS || 120000);
 const YT_FORMAT = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best';
 const FFMPEG_PATH = ffmpegPath;
+const YTDLP_COMMON = ['--no-warnings', '--force-ipv4', '--no-check-certificates'];
+
+function ytDlpPlatformArgs(url) {
+  if (/tiktok\.com|vt\.tiktok\.com/.test(url)) {
+    return ['--extractor-args', 'tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com'];
+  }
+  if (/youtube\.com|youtu\.be/.test(url)) {
+    return [];
+  }
+  if (/instagram\.com/.test(url)) {
+    // Instagram Reels only serve VP9; re-encode to H.264 so iPhone/WhatsApp can play it.
+    return ['--postprocessor-args', 'ffmpeg:-c:v libx264 -crf 23 -preset fast -c:a aac -b:a 128k'];
+  }
+  return [];
+}
 
 function ensureDownloadDir() {
   try { fs.mkdirSync(DOWNLOAD_DIR, { recursive: true }); } catch {}
@@ -111,7 +126,8 @@ async function handleDownload(currentSock, jid, rawUrl) {
 
   let meta;
   try {
-    const json = await spawnYtDlp(['-j', '--no-warnings', '-f', YT_FORMAT, '--', url]);
+    const args = [...YTDLP_COMMON, ...ytDlpPlatformArgs(url), '-j', '-f', YT_FORMAT, '--', url];
+    const json = await spawnYtDlp(args);
     meta = JSON.parse(json);
   } catch (err) {
     const reason = /login|sign in|cookie|private|age.restrict|empty media response/i.test(err.message)
@@ -130,7 +146,8 @@ async function handleDownload(currentSock, jid, rawUrl) {
   await currentSock.sendMessage(jid, { text: `⏳ Mengunduh: ${title}...` }).catch(() => {});
 
   try {
-    await spawnYtDlp(['-o', filePath, '--no-warnings', '-f', YT_FORMAT, '--', url]);
+    const args = [...YTDLP_COMMON, ...ytDlpPlatformArgs(url), '-o', filePath, '-f', YT_FORMAT, '--', url];
+    await spawnYtDlp(args);
   } catch (err) {
     await currentSock.sendMessage(jid, { text: `❌ Gagal mengunduh: ${err.message}` }).catch(() => {});
     return;
